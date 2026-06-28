@@ -1,0 +1,6 @@
+{
+  "name": "ZeroHour",
+  "description": "An AI-powered emergency command center and proactive companion that triages tasks, plans hyper-focused survival schedules, drafts starter materials, and uses vocal pep-talks to help you conquer impending deadlines.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
