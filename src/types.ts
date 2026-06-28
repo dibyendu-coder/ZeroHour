@@ -12,6 +12,8 @@ export interface Task {
   completed: boolean;
   notes?: string;
   survivalPlanGenerated?: boolean;
+  createdAt?: string;
+  completedAt?: string;
 }
 
 export interface SurvivalStep {

@@ -24,8 +24,25 @@ import {
   Lock,
   Mail,
   XCircle,
-  HelpCircle
+  HelpCircle,
+  BarChart3,
+  Lightbulb
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip as ChartTooltip,
+  CartesianGrid,
+  PieChart as RePieChart,
+  Pie,
+  Cell,
+  Legend
+} from 'recharts';
 import PanicTimer from './components/PanicTimer';
 import { Task, SurvivalPlan, Habit, TriageResult, ProcrastinationRisk, ExcuseDraft, PepTalk } from './types';
 import { pcmToWavBlob } from './utils/audio';
@@ -34,10 +51,85 @@ import { listUpcomingEvents, createCalendarEvent, CalendarEvent } from './utils/
 import { User } from 'firebase/auth';
 
 // Default tasks for an instant, engaging experience
-const INITIAL_TASKS: Task[] = [];
+const INITIAL_TASKS: Task[] = [
+  {
+    id: 'task-hist-1',
+    title: 'CS 101 Final Project Draft',
+    deadline: '2026-06-25T23:59',
+    difficulty: 'hard',
+    panicLevel: 9,
+    category: 'academic',
+    completed: true,
+    createdAt: '2026-06-22T14:30:00.000Z',
+    completedAt: '2026-06-25T22:15:00.000Z',
+    notes: 'Complex database joins and API integration. Barely got it in!'
+  },
+  {
+    id: 'task-hist-2',
+    title: 'Slide Deck for Marketing Review',
+    deadline: '2026-06-24T17:00',
+    difficulty: 'medium',
+    panicLevel: 7,
+    category: 'professional',
+    completed: true,
+    createdAt: '2026-06-21T09:00:00.000Z',
+    completedAt: '2026-06-24T15:45:00.000Z',
+    notes: 'Needed to compile Q2 metrics. Very tight deadline.'
+  },
+  {
+    id: 'task-hist-3',
+    title: 'Fix Broken Kitchen Sink Pipe',
+    deadline: '2026-06-26T12:00',
+    difficulty: 'easy',
+    panicLevel: 4,
+    category: 'household',
+    completed: true,
+    createdAt: '2026-06-26T08:00:00.000Z',
+    completedAt: '2026-06-26T10:30:00.000Z',
+    notes: 'Water leak. Had to rush to hardware store.'
+  },
+  {
+    id: 'task-hist-4',
+    title: 'Submit Tax Return Documents',
+    deadline: '2026-06-21T23:59',
+    difficulty: 'hard',
+    panicLevel: 8,
+    category: 'other',
+    completed: true,
+    createdAt: '2026-06-21T21:00:00.000Z',
+    completedAt: '2026-06-21T23:20:00.000Z',
+    notes: 'Last-minute filing panic on a Sunday night.'
+  },
+  {
+    id: 'task-hist-5',
+    title: 'Draft Letter of Recommendation',
+    deadline: '2026-06-29T18:00',
+    difficulty: 'medium',
+    panicLevel: 6,
+    category: 'professional',
+    completed: false,
+    createdAt: '2026-06-28T10:00:00.000Z',
+    notes: 'For Sarah\'s grad school application.'
+  },
+  {
+    id: 'task-hist-6',
+    title: 'Pay Car Insurance Premium',
+    deadline: '2026-07-02T23:59',
+    difficulty: 'easy',
+    panicLevel: 3,
+    category: 'personal',
+    completed: false,
+    createdAt: '2026-06-27T16:00:00.000Z',
+    notes: 'Due in a few days.'
+  }
+];
 
 // Default habits to showcase routine momentum
-const INITIAL_HABITS: Habit[] = [];
+const INITIAL_HABITS: Habit[] = [
+  { id: 'habit-1', name: 'Write a 5-minute raw outline', frequency: 'daily', streak: 4, lastCompleted: '2026-06-27' },
+  { id: 'habit-2', name: 'Check ZeroHour triage board', frequency: 'daily', streak: 6, lastCompleted: '2026-06-28' },
+  { id: 'habit-3', name: 'Take a deep breathing break before starting hard tasks', frequency: 'daily', streak: 2, lastCompleted: '2026-06-27' }
+];
 
 export default function App() {
   // --- Persistent State ---
@@ -52,7 +144,7 @@ export default function App() {
   });
 
   // --- UI and AI Output States ---
-  const [activeTab, setActiveTab] = useState<'triage' | 'planner' | 'peptalk' | 'excuse' | 'risk' | 'calendar'>('triage');
+  const [activeTab, setActiveTab] = useState<'triage' | 'planner' | 'peptalk' | 'excuse' | 'risk' | 'calendar' | 'analytics'>('triage');
   const [loading, setLoading] = useState<boolean>(false);
   
   // --- Google Calendar State ---
@@ -271,6 +363,34 @@ export default function App() {
   // Copied alert helpers
   const [copiedText, setCopiedText] = useState<'draft' | 'excuse' | null>(null);
 
+  // Fake Stakeholder Simulator States
+  const [simSubTab, setSimSubTab] = useState<'draft' | 'simulate'>('draft');
+  const [simPersona, setSimPersona] = useState<'strict-manager' | 'angry-client' | 'professor'>('strict-manager');
+  const [simMessages, setSimMessages] = useState<Array<{ 
+    role: 'user' | 'assistant'; 
+    content: string; 
+    feedback?: string; 
+    stats?: { 
+      defensiveness: number; 
+      professionalism: number; 
+      clarity: number; 
+      successLikelihood: number; 
+    }; 
+  }>>([]);
+  const [simInput, setSimInput] = useState('');
+  const [simLoading, setSimLoading] = useState(false);
+  const [simTask, setSimTask] = useState('');
+
+  // Crisis Analytics States
+  const [analyticsInsight, setAnalyticsInsight] = useState<{
+    overallInsight: string;
+    personalizedParagraph: string;
+    recommendedRoutineTitle: string;
+    recommendedRoutineDescription: string;
+    customTagline: string;
+  } | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState<boolean>(false);
+
   // --- Synchronise State to LocalStorage ---
   useEffect(() => {
     localStorage.setItem('saver_tasks', JSON.stringify(tasks));
@@ -304,7 +424,8 @@ export default function App() {
       panicLevel: newTaskPanic,
       category: newTaskCategory,
       completed: false,
-      notes: newTaskNotes.trim() || undefined
+      notes: newTaskNotes.trim() || undefined,
+      createdAt: new Date().toISOString()
     };
 
     setTasks(prev => [created, ...prev]);
@@ -321,7 +442,11 @@ export default function App() {
   };
 
   const toggleTaskCompleted = (id: string) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+    setTasks(prev => prev.map(t => t.id === id ? { 
+      ...t, 
+      completed: !t.completed,
+      completedAt: !t.completed ? new Date().toISOString() : undefined
+    } : t));
   };
 
   const handleDeleteTask = (id: string) => {
@@ -508,6 +633,92 @@ export default function App() {
       setLoading(false);
     }
   };
+
+  // Fake Stakeholder Simulator sending handler
+  const handleSendSimMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!simInput.trim() || simLoading) return;
+
+    const userMessageText = simInput.trim();
+    setSimInput('');
+
+    // Add user message locally
+    const updatedMessages = [
+      ...simMessages,
+      { role: 'user' as const, content: userMessageText }
+    ];
+    setSimMessages(updatedMessages);
+    setSimLoading(true);
+
+    try {
+      const activeTask = simTask || excuseTask || (selectedPlanTask ? selectedPlanTask.title : "deliverables");
+      const response = await fetch('/api/stakeholder-simulator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
+          persona: simPersona,
+          taskTitle: activeTask
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setSimMessages([
+          ...updatedMessages,
+          {
+            role: 'assistant' as const,
+            content: data.reply,
+            feedback: data.feedback,
+            stats: {
+              defensiveness: data.defensiveness,
+              professionalism: data.professionalism,
+              clarity: data.clarity,
+              successLikelihood: data.successLikelihood
+            }
+          }
+        ]);
+      } else {
+        alert("Simulator Error: " + (data.error || "Failed to simulate response"));
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Network Error in simulation.");
+    } finally {
+      setSimLoading(false);
+    }
+  };
+
+  const resetSimulator = () => {
+    setSimMessages([]);
+    setSimInput('');
+  };
+
+  // Crisis Analytics Call
+  const triggerCrisisAnalysis = async () => {
+    setAnalyticsLoading(true);
+    try {
+      const response = await fetch('/api/crisis-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tasks })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setAnalyticsInsight(data);
+      }
+    } catch (err) {
+      console.error("Failed to load crisis post-mortem:", err);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'analytics' && !analyticsInsight) {
+      triggerCrisisAnalysis();
+    }
+  }, [activeTab]);
 
   // 5. Procrastination Risk CBT Call
   const triggerProcrastinationRisk = async () => {
@@ -902,7 +1113,7 @@ export default function App() {
           </div>
 
           {/* Sticky Panic Timer and Deep Focus Breathing Column */}
-          <PanicTimer />
+          <PanicTimer selectedTask={selectedPlanTask} tasks={tasks} onSelectTask={setSelectedPlanTask} />
 
         </div>
 
@@ -982,6 +1193,17 @@ export default function App() {
             >
               <Calendar className="w-4 h-4 text-rose-500" />
               6. Google Calendar Sync
+            </button>
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-display font-black border transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'analytics'
+                  ? 'bg-white text-slate-950 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]'
+                  : 'text-slate-700 border-transparent hover:bg-white/50'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4 text-emerald-500" />
+              7. Crisis Analytics
             </button>
           </div>
 
@@ -1420,109 +1642,333 @@ export default function App() {
             {/* TAB 4: EXCUSE/APOLOGY DRAFTS */}
             {activeTab === 'excuse' && (
               <div className="space-y-6">
-                <div className="border-b pb-3">
-                  <h3 className="text-xl font-display font-black text-slate-900 flex items-center gap-1.5">
-                    <Mail className="w-5 h-5 text-blue-500" />
-                    Extension Request & Apology Builder
-                  </h3>
-                  <p className="text-xs text-slate-500 font-sans">
-                    Need extra time? Generate an extremely respectful, polite, professional draft to maximize success rates.
-                  </p>
-                </div>
+                <div className="border-b pb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-display font-black text-slate-900 flex items-center gap-1.5">
+                      <Mail className="w-5 h-5 text-blue-500" />
+                      Apologies & Stakeholder Simulator
+                    </h3>
+                    <p className="text-xs text-slate-500 font-sans">
+                      Draft standard respectful extension emails OR run an interactive practice simulation with simulated managers or professors.
+                    </p>
+                  </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-3 md:col-span-1 bg-slate-50 border p-4 rounded-xl">
-                    <h4 className="text-xs font-mono font-bold text-slate-500 uppercase tracking-wide">
-                      Draft Inputs
-                    </h4>
-                    
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Select Task Context</label>
-                      <select
-                        value={excuseTask}
-                        onChange={(e) => setExcuseTask(e.target.value)}
-                        className="w-full text-xs p-2 rounded-lg border bg-white focus:outline-none"
-                      >
-                        <option value="">-- Active selection --</option>
-                        {tasks.map(t => (
-                          <option key={t.id} value={t.title}>{t.title}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Reason Category</label>
-                      <select
-                        value={excuseReason}
-                        onChange={(e) => setExcuseReason(e.target.value)}
-                        className="w-full text-xs p-2 rounded-lg border bg-white focus:outline-none"
-                      >
-                        <option value="unforeseen technical block">⚡ Unexpected Tech/Coding Bug</option>
-                        <option value="medical/mental exhaustion">🩺 Mental Exhaustion / Health</option>
-                        <option value="high priority project collision">💼 Sudden Workspace Emergency</option>
-                        <option value="general unexpected delays">📦 General Logistics Delay</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Vibe / Style</label>
-                      <select
-                        value={excuseVibe}
-                        onChange={(e) => setExcuseVibe(e.target.value)}
-                        className="w-full text-xs p-2 rounded-lg border bg-white focus:outline-none"
-                      >
-                        <option value="tactful-professional">👔 Tactful Professional</option>
-                        <option value="extremely-humble">🙇 Extremely Humble & Apologetic</option>
-                        <option value="direct-and-honest">📢 Direct & Honest</option>
-                        <option value="creative-but-professional">✨ Creative but Professional</option>
-                      </select>
-                    </div>
-
+                  {/* Sub Tab Navigation */}
+                  <div className="flex gap-1 bg-slate-100 p-1 rounded-xl self-start md:self-auto border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                     <button
-                      onClick={triggerExcuseDraft}
-                      disabled={loading}
-                      className="w-full mt-2 py-2 bg-slate-900 hover:bg-slate-800 text-white font-display text-xs font-bold rounded-lg border border-slate-900 transition-all hover:-translate-y-0.5"
+                      onClick={() => setSimSubTab('draft')}
+                      className={`px-3 py-1.5 text-xs font-display font-black rounded-lg transition-all ${
+                        simSubTab === 'draft'
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'text-slate-700 hover:text-slate-950'
+                      }`}
                     >
-                      Draft Email
+                      📧 Email Drafter
+                    </button>
+                    <button
+                      onClick={() => setSimSubTab('simulate')}
+                      className={`px-3 py-1.5 text-xs font-display font-black rounded-lg transition-all flex items-center gap-1 ${
+                        simSubTab === 'simulate'
+                          ? 'bg-rose-600 text-white shadow-xs'
+                          : 'text-slate-700 hover:text-slate-950'
+                      }`}
+                    >
+                      🤖 Practice Simulator
                     </button>
                   </div>
-
-                  <div className="md:col-span-2 space-y-4">
-                    {excuseDraft ? (
-                      <div className="space-y-4 animate-fade-in">
-                        {/* Subject line bar */}
-                        <div className="p-3 bg-slate-900 text-white rounded-xl border-2 border-slate-950 flex items-center justify-between text-xs font-mono">
-                          <span className="truncate max-w-[80%]"><strong>Subject:</strong> {excuseDraft.subject}</span>
-                          <button
-                            onClick={() => copyToClipboard(`Subject: ${excuseDraft.subject}\n\n${excuseDraft.body}`, 'excuse')}
-                            className="bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded text-[10px] shrink-0 border border-slate-700"
-                          >
-                            {copiedText === 'excuse' ? 'Copied!' : 'Copy Email'}
-                          </button>
-                        </div>
-
-                        {/* Email text box */}
-                        <div className="p-4 bg-slate-50 border-2 border-slate-200 rounded-xl max-h-[220px] overflow-y-auto text-xs font-sans text-slate-850 leading-relaxed whitespace-pre-wrap select-all">
-                          {excuseDraft.body}
-                        </div>
-
-                        {/* Tips */}
-                        <div className="p-3 bg-blue-500/10 border-l-4 border-blue-500 rounded-r-xl">
-                          <p className="text-[10px] font-mono font-bold text-blue-800 uppercase tracking-wide">💡 Delivery Tips:</p>
-                          <p className="text-xs text-slate-750 mt-1 italic font-medium">{excuseDraft.tips}</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center h-full flex flex-col items-center justify-center bg-slate-50/50">
-                        <Mail className="w-10 h-10 text-slate-300 mb-2" />
-                        <h4 className="font-display font-bold text-slate-650 text-sm">Excuse Draft Awaiting Trigger</h4>
-                        <p className="text-xs text-slate-450 max-w-[280px] mt-1 mx-auto">
-                          Specify your target task context, reason for delay, and style of appeal above to write an elegant request.
-                        </p>
-                      </div>
-                    )}
-                  </div>
                 </div>
+
+                {simSubTab === 'draft' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in duration-200">
+                    <div className="space-y-3 md:col-span-1 bg-slate-50 border p-4 rounded-xl">
+                      <h4 className="text-xs font-mono font-bold text-slate-500 uppercase tracking-wide">
+                        Draft Inputs
+                      </h4>
+                      
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Select Task Context</label>
+                        <select
+                          value={excuseTask}
+                          onChange={(e) => setExcuseTask(e.target.value)}
+                          className="w-full text-xs p-2 rounded-lg border bg-white focus:outline-none"
+                        >
+                          <option value="">-- Active selection --</option>
+                          {tasks.map(t => (
+                            <option key={t.id} value={t.title}>{t.title}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Reason Category</label>
+                        <select
+                          value={excuseReason}
+                          onChange={(e) => setExcuseReason(e.target.value)}
+                          className="w-full text-xs p-2 rounded-lg border bg-white focus:outline-none"
+                        >
+                          <option value="unforeseen technical block">⚡ Unexpected Tech/Coding Bug</option>
+                          <option value="medical/mental exhaustion">🩺 Mental Exhaustion / Health</option>
+                          <option value="high priority project collision">💼 Sudden Workspace Emergency</option>
+                          <option value="general unexpected delays">📦 General Logistics Delay</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Vibe / Style</label>
+                        <select
+                          value={excuseVibe}
+                          onChange={(e) => setExcuseVibe(e.target.value)}
+                          className="w-full text-xs p-2 rounded-lg border bg-white focus:outline-none"
+                        >
+                          <option value="tactful-professional">👔 Tactful Professional</option>
+                          <option value="extremely-humble">🙇 Extremely Humble & Apologetic</option>
+                          <option value="direct-and-honest">📢 Direct & Honest</option>
+                          <option value="creative-but-professional">✨ Creative but Professional</option>
+                        </select>
+                      </div>
+
+                      <button
+                        onClick={triggerExcuseDraft}
+                        disabled={loading}
+                        className="w-full mt-2 py-2 bg-slate-900 hover:bg-slate-800 text-white font-display text-xs font-bold rounded-lg border border-slate-900 transition-all hover:-translate-y-0.5"
+                      >
+                        Draft Email
+                      </button>
+                    </div>
+
+                    <div className="md:col-span-2 space-y-4">
+                      {excuseDraft ? (
+                        <div className="space-y-4 animate-fade-in">
+                          {/* Subject line bar */}
+                          <div className="p-3 bg-slate-900 text-white rounded-xl border-2 border-slate-950 flex items-center justify-between text-xs font-mono">
+                            <span className="truncate max-w-[80%]"><strong>Subject:</strong> {excuseDraft.subject}</span>
+                            <button
+                              onClick={() => copyToClipboard(`Subject: ${excuseDraft.subject}\n\n${excuseDraft.body}`, 'excuse')}
+                              className="bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded text-[10px] shrink-0 border border-slate-700"
+                            >
+                              {copiedText === 'excuse' ? 'Copied!' : 'Copy Email'}
+                            </button>
+                          </div>
+
+                          {/* Email text box */}
+                          <div className="p-4 bg-slate-50 border-2 border-slate-200 rounded-xl max-h-[220px] overflow-y-auto text-xs font-sans text-slate-850 leading-relaxed whitespace-pre-wrap select-all">
+                            {excuseDraft.body}
+                          </div>
+
+                          {/* Tips */}
+                          <div className="p-3 bg-blue-500/10 border-l-4 border-blue-500 rounded-r-xl">
+                            <p className="text-[10px] font-mono font-bold text-blue-800 uppercase tracking-wide">💡 Delivery Tips:</p>
+                            <p className="text-xs text-slate-750 mt-1 italic font-medium">{excuseDraft.tips}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center h-full flex flex-col items-center justify-center bg-slate-50/50">
+                          <Mail className="w-10 h-10 text-slate-300 mb-2" />
+                          <h4 className="font-display font-bold text-slate-650 text-sm">Excuse Draft Awaiting Trigger</h4>
+                          <p className="text-xs text-slate-450 max-w-[280px] mt-1 mx-auto">
+                            Specify your target task context, reason for delay, and style of appeal above to write an elegant request.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-200">
+                    {/* Sidebar Configuration */}
+                    <div className="space-y-4 lg:col-span-1 bg-slate-50 border p-4 rounded-xl">
+                      <h4 className="text-xs font-mono font-bold text-slate-500 uppercase tracking-wide">
+                        Simulation Setup
+                      </h4>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1.5">Stakeholder Persona</label>
+                        <div className="grid grid-cols-1 gap-2">
+                          {[
+                            { id: 'strict-manager', label: '👔 Strict Corporate Manager', desc: 'Values structure, direct solutions & tight timelines.' },
+                            { id: 'angry-client', label: '😡 Demanding/Angry Client', desc: 'Easily irritated, budget/launch sensitive.' },
+                            { id: 'professor', label: '🎓 Soft Academic Professor', desc: 'Disappointed but understanding of early updates.' }
+                          ].map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => {
+                                setSimPersona(p.id as any);
+                                resetSimulator();
+                              }}
+                              className={`p-3 text-left rounded-lg border-2 transition-all ${
+                                simPersona === p.id
+                                  ? 'bg-rose-50 border-rose-500 text-slate-900 shadow-xs'
+                                  : 'bg-white border-slate-200 text-slate-700 hover:border-slate-350'
+                              }`}
+                            >
+                              <div className="text-xs font-bold">{p.label}</div>
+                              <div className="text-[10px] text-slate-500 mt-1 leading-normal">{p.desc}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Target Task Context</label>
+                        <select
+                          value={simTask}
+                          onChange={(e) => {
+                            setSimTask(e.target.value);
+                            resetSimulator();
+                          }}
+                          className="w-full text-xs p-2 rounded-lg border bg-white focus:outline-none"
+                        >
+                          <option value="">-- Choose active task --</option>
+                          {tasks.map(t => (
+                            <option key={t.id} value={t.title}>{t.title}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <button
+                        onClick={resetSimulator}
+                        className="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-display text-xs font-bold rounded-lg border border-slate-300 transition-all active:scale-98"
+                      >
+                        Reset Conversation
+                      </button>
+                    </div>
+
+                    {/* Chat and Coach Sandbox */}
+                    <div className="lg:col-span-2 flex flex-col h-[520px] bg-white border-2 border-slate-900 rounded-xl overflow-hidden shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]">
+                      {/* Chat Header */}
+                      <div className="bg-slate-900 text-white px-4 py-3 border-b flex items-center justify-between">
+                        <div>
+                          <span className="text-[9px] font-mono font-bold tracking-widest text-rose-400 uppercase">Interactive Sandbox Practice</span>
+                          <h4 className="text-xs font-bold">
+                            {simPersona === 'strict-manager' ? 'Chatting with Mr. Sterling (Strict Manager)' :
+                             simPersona === 'angry-client' ? 'Chatting with Arthur (Angry Client)' :
+                             'Chatting with Prof. Harrison (Understanding Professor)'}
+                          </h4>
+                        </div>
+                        <button onClick={resetSimulator} className="text-xs text-slate-400 hover:text-white underline">
+                          Clear Chat
+                        </button>
+                      </div>
+
+                      {/* Messages Area */}
+                      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30">
+                        {simMessages.length === 0 ? (
+                          <div className="h-full flex flex-col items-center justify-center text-center p-6">
+                            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center text-lg font-bold border border-rose-100 animate-bounce mb-3">
+                              💬
+                            </div>
+                            <h5 className="text-xs font-bold text-slate-700">No messages sent yet.</h5>
+                            <p className="text-[11px] text-slate-500 max-w-[280px] mt-1">
+                              Pitch your late excuse or request for extension to see how the stakeholder responds, and get real-time coaching tips!
+                            </p>
+                          </div>
+                        ) : (
+                          simMessages.map((m, idx) => (
+                            <div key={idx} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'} space-y-2`}>
+                              {/* Message bubble */}
+                              <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed ${
+                                m.role === 'user'
+                                  ? 'bg-slate-900 text-white rounded-br-none font-medium'
+                                  : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-xs'
+                              }`}>
+                                {m.content}
+                              </div>
+
+                              {/* Assistant coaching & metrics box */}
+                              {m.role === 'assistant' && (m.feedback || m.stats) && (
+                                <div className="mt-2 w-full max-w-[95%] bg-amber-50/80 border-2 border-amber-300 rounded-xl p-3.5 space-y-3 shadow-xs">
+                                  {m.feedback && (
+                                    <div className="text-[11px] text-amber-900 font-sans leading-relaxed">
+                                      <strong className="font-bold text-amber-950 block mb-0.5">💡 Coach Feedback</strong>
+                                      {m.feedback}
+                                    </div>
+                                  )}
+
+                                  {m.stats && (
+                                    <div className="grid grid-cols-2 gap-3 border-t border-amber-200/50 pt-2.5 text-[10px] font-mono">
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between">
+                                          <span className="text-slate-650 font-bold">Defensiveness:</span>
+                                          <span className={`font-bold ${m.stats.defensiveness > 5 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                            {m.stats.defensiveness}/10
+                                          </span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                          <div className={`h-full ${m.stats.defensiveness > 5 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${m.stats.defensiveness * 10}%` }} />
+                                        </div>
+                                      </div>
+
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between">
+                                          <span className="text-slate-650 font-bold">Professionalism:</span>
+                                          <span className={`font-bold ${m.stats.professionalism < 7 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                            {m.stats.professionalism}/10
+                                          </span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                          <div className={`h-full ${m.stats.professionalism < 7 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${m.stats.professionalism * 10}%` }} />
+                                        </div>
+                                      </div>
+
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between">
+                                          <span className="text-slate-650 font-bold">Clarity:</span>
+                                          <span className={`font-bold ${m.stats.clarity < 7 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                            {m.stats.clarity}/10
+                                          </span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                          <div className={`h-full ${m.stats.clarity < 7 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${m.stats.clarity * 10}%` }} />
+                                        </div>
+                                      </div>
+
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between">
+                                          <span className="text-slate-650 font-bold">Success Likelihood:</span>
+                                          <span className="font-bold text-slate-800">{m.stats.successLikelihood}%</span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                          <div className="h-full bg-emerald-500" style={{ width: `${m.stats.successLikelihood}%` }} />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
+                        {simLoading && (
+                          <div className="flex items-center gap-2 text-xs font-mono text-slate-450 py-1">
+                            <span className="w-1.5 h-1.5 bg-rose-400 rounded-full animate-bounce" />
+                            <span className="w-1.5 h-1.5 bg-rose-400 rounded-full animate-bounce delay-75" />
+                            <span className="w-1.5 h-1.5 bg-rose-400 rounded-full animate-bounce delay-150" />
+                            <span>Stakeholder is reading & formulating response...</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Chat Input */}
+                      <form onSubmit={handleSendSimMessage} className="border-t p-3 flex gap-2 bg-slate-50">
+                        <input
+                          type="text"
+                          value={simInput}
+                          onChange={(e) => setSimInput(e.target.value)}
+                          disabled={simLoading}
+                          placeholder={simLoading ? "Waiting for stakeholder..." : "Send excuse: e.g., 'The system crashed, I will need until tomorrow morning.'"}
+                          className="flex-1 bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-xs font-sans focus:outline-none focus:border-rose-500"
+                        />
+                        <button
+                          type="submit"
+                          disabled={simLoading || !simInput.trim()}
+                          className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white rounded-xl border border-slate-950 font-display font-bold text-xs shadow-[2px_2px_0px_0px_rgba(0,0,0,0.15)] transition-all active:scale-95 shrink-0"
+                        >
+                          Send Appeal
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1839,6 +2285,256 @@ export default function App() {
                 )}
               </div>
             )}
+
+            {/* TAB 7: CRISIS ANALYTICS */}
+            {activeTab === 'analytics' && (() => {
+              // Mathematical and Stats calculations
+              const totalTasksCount = tasks.length;
+              const completedTasksCount = tasks.filter(t => t.completed).length;
+              const activeTasksCount = totalTasksCount - completedTasksCount;
+              const resolutionRatePercent = totalTasksCount > 0 
+                ? Math.round((completedTasksCount / totalTasksCount) * 100) 
+                : 0;
+              
+              const averagePanicLevel = totalTasksCount > 0 
+                ? (tasks.reduce((sum, t) => sum + t.panicLevel, 0) / totalTasksCount).toFixed(1)
+                : "0.0";
+
+              // Calculate Weekend ratio (Saturday/Sunday)
+              const weekendTasks = tasks.filter(t => {
+                try {
+                  const d = new Date(t.deadline);
+                  const day = d.getDay(); // 0 is Sunday, 6 is Saturday
+                  return day === 0 || day === 6;
+                } catch {
+                  return false;
+                }
+              });
+              const weekendRatio = totalTasksCount > 0 
+                ? Math.round((weekendTasks.length / totalTasksCount) * 100)
+                : 0;
+
+              // Formatting category counts for recharts BarChart
+              const categoriesList = ['academic', 'professional', 'personal', 'household', 'other'];
+              const categoryCounts = categoriesList.map(cat => {
+                const count = tasks.filter(t => t.category === cat).length;
+                const avgCategoryPanic = tasks.filter(t => t.category === cat).length > 0
+                  ? (tasks.filter(t => t.category === cat).reduce((sum, t) => sum + t.panicLevel, 0) / tasks.filter(t => t.category === cat).length).toFixed(1)
+                  : "0.0";
+                return {
+                  name: cat.charAt(0).toUpperCase() + cat.slice(1),
+                  count,
+                  avgPanic: parseFloat(avgCategoryPanic)
+                };
+              });
+
+              // Formatting task panic levels for Recharts AreaChart
+              const timelineData = [...tasks]
+                .sort((a, b) => a.deadline.localeCompare(b.deadline))
+                .map(t => ({
+                  name: t.title.length > 15 ? t.title.slice(0, 12) + '...' : t.title,
+                  'Panic Level': t.panicLevel,
+                  status: t.completed ? 'Completed' : 'Active'
+                }));
+
+              return (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  <div className="border-b pb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <h3 className="text-xl font-display font-black text-slate-900 flex items-center gap-1.5">
+                        <BarChart3 className="w-5 h-5 text-emerald-500" />
+                        Last-Minute Post-Mortem & Crisis Analytics
+                      </h3>
+                      <p className="text-xs text-slate-500 font-sans">
+                        Track metrics from completed and active emergency tasks to optimize your performance under extreme pressure.
+                      </p>
+                    </div>
+                    <button
+                      onClick={triggerCrisisAnalysis}
+                      disabled={analyticsLoading}
+                      className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl border border-slate-950 font-display font-bold text-xs flex items-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 transition-all cursor-pointer"
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 ${analyticsLoading ? 'animate-spin text-amber-400' : 'text-amber-300'}`} />
+                      {analyticsLoading ? 'Analyzing Habits...' : 'Re-Analyze with AI'}
+                    </button>
+                  </div>
+
+                  {/* BENTO STATS GRID */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {/* Card 1: Crisis Resolution Rate */}
+                    <div className="bg-emerald-50 border-2 border-emerald-500 rounded-2xl p-4 shadow-[2px_2px_0px_0px_rgba(16,185,129,0.3)]">
+                      <div className="text-[10px] font-mono font-bold text-emerald-700 uppercase tracking-wider">Resolution Rate</div>
+                      <div className="text-2xl font-display font-black text-emerald-950 mt-1">{resolutionRatePercent}%</div>
+                      <p className="text-[10px] text-emerald-800 mt-1 font-medium">
+                        {completedTasksCount} of {totalTasksCount} tasks resolved
+                      </p>
+                      <div className="w-full bg-emerald-200 h-1.5 rounded-full mt-2 overflow-hidden">
+                        <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${resolutionRatePercent}%` }} />
+                      </div>
+                    </div>
+
+                    {/* Card 2: Average Panic Level */}
+                    <div className="bg-rose-50 border-2 border-rose-500 rounded-2xl p-4 shadow-[2px_2px_0px_0px_rgba(239,68,68,0.3)]">
+                      <div className="text-[10px] font-mono font-bold text-rose-700 uppercase tracking-wider">Average Panic Level</div>
+                      <div className="text-2xl font-display font-black text-rose-950 mt-1">{averagePanicLevel}<span className="text-xs text-rose-500 font-bold">/10</span></div>
+                      <p className="text-[10px] text-rose-800 mt-1 font-medium">
+                        {parseFloat(averagePanicLevel) >= 7 ? '🔥 Extreme stress' : parseFloat(averagePanicLevel) >= 5 ? '⚡ High focus' : '💡 Manageable strain'}
+                      </p>
+                      <div className="w-full bg-rose-200 h-1.5 rounded-full mt-2 overflow-hidden">
+                        <div className="bg-rose-500 h-full rounded-full" style={{ width: `${parseFloat(averagePanicLevel) * 10}%` }} />
+                      </div>
+                    </div>
+
+                    {/* Card 3: Total Emergencies */}
+                    <div className="bg-amber-50 border-2 border-amber-500 rounded-2xl p-4 shadow-[2px_2px_0px_0px_rgba(245,158,11,0.3)]">
+                      <div className="text-[10px] font-mono font-bold text-amber-700 uppercase tracking-wider">Total Crisis Logged</div>
+                      <div className="text-2xl font-display font-black text-amber-950 mt-1">{totalTasksCount}</div>
+                      <p className="text-[10px] text-amber-800 mt-1 font-medium">
+                        {activeTasksCount} active remaining
+                      </p>
+                      <div className="w-full bg-amber-200 h-1.5 rounded-full mt-2 overflow-hidden">
+                        <div className="bg-amber-500 h-full rounded-full" style={{ width: `${totalTasksCount > 0 ? (activeTasksCount / totalTasksCount) * 100 : 0}%` }} />
+                      </div>
+                    </div>
+
+                    {/* Card 4: Weekend Emergency Ratio */}
+                    <div className="bg-blue-50 border-2 border-blue-500 rounded-2xl p-4 shadow-[2px_2px_0px_0px_rgba(59,130,246,0.3)]">
+                      <div className="text-[10px] font-mono font-bold text-blue-700 uppercase tracking-wider">Weekend Stress Ratio</div>
+                      <div className="text-2xl font-display font-black text-blue-950 mt-1">{weekendRatio}%</div>
+                      <p className="text-[10px] text-blue-800 mt-1 font-medium">
+                        {weekendTasks.length} weekend items logged
+                      </p>
+                      <div className="w-full bg-blue-200 h-1.5 rounded-full mt-2 overflow-hidden">
+                        <div className="bg-blue-500 h-full rounded-full" style={{ width: `${weekendRatio}%` }} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* RECHARTS VISUALIZATIONS SECTION */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Left: Panic Timeline Chart */}
+                    <div className="p-4 bg-white border-2 border-slate-900 rounded-2xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-mono font-black text-slate-800 uppercase tracking-wider">Panic Level Distribution</h4>
+                        <span className="text-[9px] font-mono bg-rose-100 text-rose-800 border border-rose-200 px-1.5 rounded-md font-bold uppercase">Deadlines Timeline</span>
+                      </div>
+                      
+                      {timelineData.length === 0 ? (
+                        <div className="h-[200px] flex items-center justify-center text-xs text-slate-400 italic">
+                          No task panic data to map yet.
+                        </div>
+                      ) : (
+                        <div className="h-[220px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={timelineData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                              <defs>
+                                <linearGradient id="colorPanic" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4}/>
+                                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} fontStyle="mono" />
+                              <YAxis domain={[0, 10]} stroke="#94a3b8" fontSize={9} fontStyle="mono" />
+                              <ChartTooltip 
+                                contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', padding: '8px 12px' }}
+                                labelStyle={{ color: '#ffffff', fontWeight: 'bold', fontSize: '10px', fontFamily: 'sans-serif' }}
+                                itemStyle={{ color: '#fca5a5', fontSize: '11px', fontFamily: 'monospace' }}
+                              />
+                              <Area type="monotone" dataKey="Panic Level" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorPanic)" />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: Emergencies by Category */}
+                    <div className="p-4 bg-white border-2 border-slate-900 rounded-2xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-mono font-black text-slate-800 uppercase tracking-wider">Category Breakdown & Strain</h4>
+                        <span className="text-[9px] font-mono bg-emerald-100 text-emerald-800 border border-emerald-200 px-1.5 rounded-md font-bold uppercase">Logged Categories</span>
+                      </div>
+
+                      {totalTasksCount === 0 ? (
+                        <div className="h-[200px] flex items-center justify-center text-xs text-slate-400 italic">
+                          No category breakdowns available.
+                        </div>
+                      ) : (
+                        <div className="h-[220px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={categoryCounts} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} fontStyle="mono" />
+                              <YAxis stroke="#94a3b8" fontSize={9} domain={[0, 'dataMax + 1']} allowDecimals={false} fontStyle="mono" />
+                              <ChartTooltip
+                                contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', padding: '8px 12px' }}
+                                labelStyle={{ color: '#ffffff', fontWeight: 'bold', fontSize: '10px', fontFamily: 'sans-serif' }}
+                                itemStyle={{ color: '#34d399', fontSize: '11px', fontFamily: 'monospace' }}
+                              />
+                              <Bar dataKey="count" name="Tasks Logged" fill="#6366f1" radius={[6, 6, 0, 0]}>
+                                {categoryCounts.map((entry, index) => {
+                                  const colors = ['#6366f1', '#10b981', '#3b82f6', '#f59e0b', '#ec4899'];
+                                  return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                                })}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* AI POST-MORTEM & PREVENTATIVE BUFFER LOOP */}
+                  <div className="bg-slate-900 border-2 border-slate-950 rounded-2xl p-5 text-white space-y-4 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+                    <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-3">
+                      <div>
+                        <span className="text-[10px] font-mono text-amber-400 font-bold tracking-widest uppercase flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                          AI Post-Mortem & Preventative Feedback Buffer
+                        </span>
+                        <h4 className="text-base font-display font-black tracking-tight mt-0.5">
+                          {analyticsInsight ? analyticsInsight.overallInsight : 'Adrenaline-Fueled Sunday Gladiator'}
+                        </h4>
+                      </div>
+                      <div className="p-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-lg">
+                        <Lightbulb className="w-5 h-5" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {/* Analysis paragraph */}
+                      <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                        {analyticsInsight 
+                          ? analyticsInsight.personalizedParagraph 
+                          : `Based on your emergency logs, you hold off on hard deliverables until the pressure is critical. With an average panic level of ${averagePanicLevel}/10, you rely heavily on last-minute focus. While you have a ${resolutionRatePercent}% resolution rate, this is highly draining on your mental battery.`
+                        }
+                      </p>
+
+                      {/* Micro-Routine Box */}
+                      <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                          <h5 className="text-xs font-mono font-bold text-slate-100">
+                            Preventative Routine: <span className="text-emerald-400">{analyticsInsight ? analyticsInsight.recommendedRoutineTitle : 'The Saturday Micro-Routine'}</span>
+                          </h5>
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          {analyticsInsight 
+                            ? analyticsInsight.recommendedRoutineDescription 
+                            : 'Dedicate just 15 minutes on Saturday morning to draft the outline or setup of your hard tasks. Starting with a frictionless, tiny 5-minute action lowers the barrier and breaks the weekend anticipation stress.'
+                          }
+                        </p>
+                      </div>
+
+                      {/* Inspiring quote */}
+                      <div className="border-l-2 border-emerald-500 pl-3 py-1 mt-1 italic text-slate-300 text-xs">
+                        &ldquo;{analyticsInsight ? analyticsInsight.customTagline : "Procrastination is just fear dressed up as fatigue. Let's make starting easier than surviving."}&rdquo;
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
           </div>
 

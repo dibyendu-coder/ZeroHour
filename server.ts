@@ -646,6 +646,195 @@ Best regards,
   }
 });
 
+// AI-Generated "Fake Stakeholder" Simulator
+app.post("/api/stakeholder-simulator", async (req, res) => {
+  const { messages, persona, taskTitle } = req.body;
+  
+  const activeTask = taskTitle || "a key deliverable";
+  const selectedPersona = persona || "strict-manager";
+  
+  // Format history for the AI
+  const historyText = (messages || []).map((m: any) => `${m.role === 'user' ? 'User (My Excuse/Update)' : 'Stakeholder Response'}: ${m.content}`).join("\n\n");
+  
+  let personaDescription = "";
+  if (selectedPersona === "strict-manager") {
+    personaDescription = "a strict corporate manager who values timelines, updates, structure, and direct solutions above excuses. They are firm but professional.";
+  } else if (selectedPersona === "angry-client") {
+    personaDescription = "a demanding, highly impatient, and easily irritated external client whose reputation and budget depend on this deliverable. They have high expectations and react with anxiety or frustration to delays.";
+  } else {
+    personaDescription = "an understanding but slightly disappointed academic professor or mentor who values learning, early communication, and genuine efforts, but still expects quality.";
+  }
+
+  const prompt = `You are playing the role of ${personaDescription}.
+The current deliverable in discussion is: "${activeTask}"
+
+Here is the conversation history so far:
+${historyText}
+
+Based on the conversation history and the USER'S LATEST MESSAGE, do the following:
+1. Formulate an authentic, in-character, professional response as the stakeholder (the selected persona). Keep it to 2-3 concise paragraphs.
+2. Step out of character and act as an AI communications coach. Review the user's latest message and provide brief, punchy constructive feedback (under 80 words) focusing on clarity, defensiveness, and how they can improve (e.g. "This sounds too defensive, try shifting the focus to your solution block instead.").
+3. Evaluate the user's latest message on four scores: Defensiveness (1-10), Professionalism (1-10), Clarity (1-10), and Success Likelihood of securing the extension (0-100%).
+
+Return a JSON object conforming exactly to this structure:
+{
+  "reply": "The stakeholder's in-character response",
+  "feedback": "Coaching tips, e.g. 'Your message relies slightly too much on personal excuses. Focus on concrete solutions and a new timeline.'",
+  "defensiveness": 6,
+  "professionalism": 8,
+  "clarity": 7,
+  "successLikelihood": 65
+}`;
+
+  try {
+    const response = await callGeminiWithRetryAndFallback(
+      "gemini-3.5-flash",
+      prompt,
+      {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            reply: { type: Type.STRING },
+            feedback: { type: Type.STRING },
+            defensiveness: { type: Type.INTEGER },
+            professionalism: { type: Type.INTEGER },
+            clarity: { type: Type.INTEGER },
+            successLikelihood: { type: Type.INTEGER }
+          },
+          required: ["reply", "feedback", "defensiveness", "professionalism", "clarity", "successLikelihood"]
+        }
+      }
+    );
+
+    const resultText = response.text || "{}";
+    res.json(JSON.parse(resultText));
+  } catch (error: any) {
+    console.log("[Service Status] Stakeholder simulator fallback triggered...", error);
+    
+    // Offline local smart heuristics fallback
+    let reply = "";
+    let feedback = "";
+    let defensiveness = 5;
+    let professionalism = 7;
+    let clarity = 8;
+    let successLikelihood = 60;
+
+    const userLatest = messages && messages.length > 0 ? messages[messages.length - 1].content.toLowerCase() : "";
+
+    if (selectedPersona === "strict-manager") {
+      reply = `Thank you for the update. While I appreciate you flagging the delay on "${activeTask}", we are on a very tight timeline. I need to know: what is your recovery plan, and when exactly can we expect the final delivery? Let's stay aligned on solutions here.`;
+      feedback = "The Strict Manager wants immediate clarity on your action plan. Avoid explaining the detailed background of the mistake; instead, explicitly state your next steps and a concrete new deadline.";
+    } else if (selectedPersona === "angry-client") {
+      reply = `To be frank, this is a major issue for us. We have teams waiting on "${activeTask}" and this delay pushes back our launch. I need a clear status report on what's complete right now and what is being done to resolve this immediately.`;
+      feedback = "Angry clients are anxious about their own risk. Reassure them by offering a partial deliverable or a quick progress review, and keep your tone highly professional and solution-oriented.";
+    } else {
+      reply = `I appreciate you reaching out to let me know about the challenges you're facing with "${activeTask}". It's always better to communicate early. Let's schedule a brief chat during office hours to see how we can get this back on track.`;
+      feedback = "Professors respond well to transparency, responsibility, and requests for guidance. Your message was received well, but ensure you propose a specific time to check in.";
+    }
+
+    if (userLatest.includes("sorry") || userLatest.includes("apologize")) {
+      defensiveness += 1;
+      feedback += " Pro-Tip: Saying sorry too many times can undermine professional confidence. Switch to thanking them for their patience instead!";
+    }
+
+    res.json({
+      reply,
+      feedback,
+      defensiveness,
+      professionalism,
+      clarity,
+      successLikelihood
+    });
+  }
+});
+
+// AI-Powered "Crisis Analytics" & Post-Mortem Coach
+app.post("/api/crisis-analysis", async (req, res) => {
+  const { tasks } = req.body;
+  
+  const totalTasks = (tasks || []).length;
+  const completedTasks = (tasks || []).filter((t: any) => t.completed).length;
+  const activeTasks = totalTasks - completedTasks;
+  
+  const avgPanic = totalTasks > 0 
+    ? (tasks.reduce((acc: number, t: any) => acc + (t.panicLevel || 5), 0) / totalTasks).toFixed(1)
+    : "0.0";
+    
+  const resolutionRate = totalTasks > 0
+    ? Math.round((completedTasks / totalTasks) * 100)
+    : 0;
+
+  // Let's count categories
+  const categories = (tasks || []).reduce((acc: any, t: any) => {
+    acc[t.category] = (acc[t.category] || 0) + 1;
+    return acc;
+  }, {});
+
+  const prompt = `You are a warm, witty, and deeply constructive performance coach analyzing a student or worker's procrastination habits and "emergency task logs".
+They have recorded a total of ${totalTasks} tasks in their ZeroHour dashboard, with ${completedTasks} completed successfully and ${activeTasks} still outstanding.
+Their average self-reported panic level at the moment of logging is ${avgPanic} out of 10.
+Their Crisis Resolution Rate is ${resolutionRate}%.
+The distribution of categories they log is: ${JSON.stringify(categories)}.
+
+Please analyze these statistics and formulate:
+1. "overallInsight": A witty, catchy, or insightful style nickname of their procrastination personality (e.g. "Adrenaline-Fueled Sunday Night Gladiator", "The High-Stakes Micro-Task juggler", "Strategic Delay perfectionist"). Keep it under 6 words.
+2. "personalizedParagraph": A 2-3 sentence coaching observation of their emergency task log. Be supportive, humorous but highly actionable. Address how high panic levels or category clusters impact them.
+3. "recommendedRoutineTitle": A custom, snappy title of a preventive micro-routine they should establish (e.g., "The Saturday Morning Buffer", "The 10-Minute Wednesday Triage Hour", "The Low-Panic Frictionless Launchpad").
+4. "recommendedRoutineDescription": A 2-3 sentence practical step-by-step guide explaining exactly how to practice this micro-routine to break their Sunday night cycle or high-panic triggers.
+5. "customTagline": A bold, single-sentence quote or motto for them to keep in mind (e.g., "Procrastination is just fear dressed up as fatigue. Let's make starting easier than surviving.").
+
+Return a JSON object conforming exactly to this structure:
+{
+  "overallInsight": "Witty nickname",
+  "personalizedParagraph": "Deeply constructive coaching feedback.",
+  "recommendedRoutineTitle": "Name of micro-routine",
+  "recommendedRoutineDescription": "Practical steps to take.",
+  "customTagline": "Inspiring tagline"
+}`;
+
+  try {
+    const response = await callGeminiWithRetryAndFallback(
+      "gemini-3.5-flash",
+      prompt,
+      {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            overallInsight: { type: Type.STRING },
+            personalizedParagraph: { type: Type.STRING },
+            recommendedRoutineTitle: { type: Type.STRING },
+            recommendedRoutineDescription: { type: Type.STRING },
+            customTagline: { type: Type.STRING }
+          },
+          required: ["overallInsight", "personalizedParagraph", "recommendedRoutineTitle", "recommendedRoutineDescription", "customTagline"]
+        }
+      }
+    );
+
+    const resultText = response.text || "{}";
+    res.json(JSON.parse(resultText));
+  } catch (error: any) {
+    console.log("[Service Status] Crisis analysis fallback triggered...", error);
+    
+    // Witty smart fallback content
+    let overallInsight = "Adrenaline-Fueled Sunday Gladiator";
+    let personalizedParagraph = `Your logged tasks indicate that you tend to hold off on hard deliverables until the pressure is critical. With an average panic level of ${avgPanic}/10, you rely heavily on last-minute focus. While you have a ${resolutionRate}% resolution rate, this is highly draining on your mental battery.`;
+    let recommendedRoutineTitle = "The Saturday Micro-Routine";
+    let recommendedRoutineDescription = "Dedicate just 15 minutes on Saturday morning to draft the outline or setup of your hard tasks. Starting with a frictionless, tiny 5-minute action lowers the barrier and breaks the weekend anticipation stress.";
+    let customTagline = "Procrastination is just fear dressed up as fatigue. Let's make starting easier than surviving.";
+
+    res.json({
+      overallInsight,
+      personalizedParagraph,
+      recommendedRoutineTitle,
+      recommendedRoutineDescription,
+      customTagline
+    });
+  }
+});
+
 // 5. Vocal Pep-Talk Generator & TTS Engine
 app.post("/api/peptalk", async (req, res) => {
   const { taskTitle, panicLevel, vibe } = req.body;
