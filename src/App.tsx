@@ -26,7 +26,8 @@ import {
   XCircle,
   HelpCircle,
   BarChart3,
-  Lightbulb
+  Lightbulb,
+  User as UserIcon
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -44,6 +45,7 @@ import {
   Legend
 } from 'recharts';
 import PanicTimer from './components/PanicTimer';
+import DeveloperConnect from './components/DeveloperConnect';
 import { Task, SurvivalPlan, Habit, TriageResult, ProcrastinationRisk, ExcuseDraft, PepTalk } from './types';
 import { pcmToWavBlob } from './utils/audio';
 import { initAuth, googleSignIn, logout } from './utils/firebaseAuth';
@@ -144,7 +146,7 @@ export default function App() {
   });
 
   // --- UI and AI Output States ---
-  const [activeTab, setActiveTab] = useState<'triage' | 'planner' | 'peptalk' | 'excuse' | 'risk' | 'calendar' | 'analytics'>('triage');
+  const [activeTab, setActiveTab] = useState<'triage' | 'planner' | 'peptalk' | 'excuse' | 'risk' | 'calendar' | 'analytics' | 'developer'>('triage');
   const [loading, setLoading] = useState<boolean>(false);
   
   // --- Google Calendar State ---
@@ -1204,6 +1206,17 @@ export default function App() {
             >
               <BarChart3 className="w-4 h-4 text-emerald-500" />
               7. Crisis Analytics
+            </button>
+            <button
+              onClick={() => setActiveTab('developer')}
+              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-display font-black border transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'developer'
+                  ? 'bg-white text-slate-950 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]'
+                  : 'text-slate-700 border-transparent hover:bg-white/50'
+              }`}
+            >
+              <UserIcon className="w-4 h-4 text-indigo-500" />
+              8. Connect Developer
             </button>
           </div>
 
@@ -2536,8 +2549,32 @@ export default function App() {
               );
             })()}
 
+            {/* TAB 8: CONNECT DEVELOPER */}
+            {activeTab === 'developer' && (
+              <DeveloperConnect />
+            )}
+
           </div>
 
+        </div>
+
+        {/* Developer Connect Hub at the bottom of the dashboard */}
+        <div className="lg:col-span-12 w-full mt-12">
+          <div className="border-b-2 border-slate-950 pb-2 mb-6 flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-display font-black text-slate-900 flex items-center gap-2">
+                <UserIcon className="w-5 h-5 text-indigo-500 animate-pulse" />
+                Developer Hub
+              </h3>
+              <p className="text-xs text-slate-500 font-sans">
+                Handshake securely with the principal platform architect and explore creator coordinates.
+              </p>
+            </div>
+            <div className="text-[10px] font-mono text-slate-400 bg-slate-100 border px-2 py-1 rounded-md">
+              SECURE HANDSHAKE SIGNAL
+            </div>
+          </div>
+          <DeveloperConnect />
         </div>
 
       </main>
