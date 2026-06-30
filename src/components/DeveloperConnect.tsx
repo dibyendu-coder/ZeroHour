@@ -171,6 +171,25 @@ const gradientColors = {
 
 export default function DeveloperConnect() {
   const [connected, setConnected] = useState(false);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('user_gemini_api_key') || '');
+  const [showKey, setShowKey] = useState(false);
+  const [isSaved, setIsSaved] = useState(() => !!localStorage.getItem('user_gemini_api_key'));
+
+  const handleSaveKey = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (apiKey.trim()) {
+      localStorage.setItem('user_gemini_api_key', apiKey.trim());
+      setIsSaved(true);
+      window.dispatchEvent(new Event('storage'));
+    }
+  };
+
+  const handleClearKey = () => {
+    localStorage.removeItem('user_gemini_api_key');
+    setApiKey('');
+    setIsSaved(false);
+    window.dispatchEvent(new Event('storage'));
+  };
 
   return (
     <div className="w-full relative min-h-[500px] border-2 border-slate-950 rounded-2xl overflow-hidden bg-slate-950">
@@ -266,6 +285,69 @@ export default function DeveloperConnect() {
                   <Layers className="w-3 h-3 text-emerald-400" />
                   Stack: <span className="text-white font-bold">React/TS/Node</span>
                 </div>
+              </div>
+
+              {/* Gemini API Key Configuration Console */}
+              <div className="p-4 bg-slate-950/90 border border-slate-800 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
+                    <span className="text-[11px] font-mono font-bold text-white uppercase tracking-wider">
+                      Gemini Key Console
+                    </span>
+                  </div>
+                  {isSaved ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-mono text-[9px] rounded-md font-bold uppercase">
+                      Custom Key Active
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-800 border border-slate-700 text-slate-400 font-mono text-[9px] rounded-md font-bold uppercase">
+                      Studio Key Active
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-[10px] font-sans text-slate-400 leading-normal">
+                  Inject your personal **Gemini API Key** to lift studio quota limits and run all AI features against your own account.
+                </p>
+
+                <form onSubmit={handleSaveKey} className="space-y-2">
+                  <div className="relative">
+                    <input
+                      type={showKey ? "text" : "password"}
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="AIzaSy..."
+                      className="w-full bg-slate-900 border border-slate-800 focus:border-slate-700 text-white font-mono text-xs px-3 py-2 rounded-xl focus:outline-none placeholder-slate-600 transition-colors pr-16"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowKey(!showKey)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-mono text-slate-400 hover:text-white bg-slate-950 px-2 py-1 border border-slate-800 rounded transition-colors"
+                    >
+                      {showKey ? "Hide" : "Show"}
+                    </button>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      disabled={!apiKey.trim()}
+                      className="flex-1 px-3 py-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-sans font-bold text-xs rounded-xl transition-all cursor-pointer text-center"
+                    >
+                      Save API Key
+                    </button>
+                    {isSaved && (
+                      <button
+                        type="button"
+                        onClick={handleClearKey}
+                        className="px-3 py-2 bg-rose-950/40 hover:bg-rose-950/60 border border-rose-900/50 text-rose-300 font-sans font-bold text-xs rounded-xl transition-all cursor-pointer"
+                      >
+                        Clear Key
+                      </button>
+                    )}
+                  </div>
+                </form>
               </div>
 
               <div className="space-y-2.5">

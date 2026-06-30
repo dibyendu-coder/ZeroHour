@@ -27,7 +27,8 @@ import {
   HelpCircle,
   BarChart3,
   Lightbulb,
-  User as UserIcon
+  User as UserIcon,
+  Terminal
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -46,6 +47,7 @@ import {
 } from 'recharts';
 import PanicTimer from './components/PanicTimer';
 import DeveloperConnect from './components/DeveloperConnect';
+import CrisisTerminal from './components/CrisisTerminal';
 import { Task, SurvivalPlan, Habit, TriageResult, ProcrastinationRisk, ExcuseDraft, PepTalk } from './types';
 import { pcmToWavBlob } from './utils/audio';
 import { initAuth, googleSignIn, logout } from './utils/firebaseAuth';
@@ -146,7 +148,7 @@ export default function App() {
   });
 
   // --- UI and AI Output States ---
-  const [activeTab, setActiveTab] = useState<'triage' | 'planner' | 'peptalk' | 'excuse' | 'risk' | 'calendar' | 'analytics' | 'developer'>('triage');
+  const [activeTab, setActiveTab] = useState<'triage' | 'planner' | 'peptalk' | 'excuse' | 'risk' | 'calendar' | 'analytics' | 'developer' | 'terminal'>('triage');
   const [loading, setLoading] = useState<boolean>(false);
   
   // --- Google Calendar State ---
@@ -499,9 +501,15 @@ export default function App() {
   const triggerAutoTriage = async () => {
     setLoading(true);
     try {
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      const customKey = localStorage.getItem('user_gemini_api_key');
+      if (customKey) {
+        headers['x-gemini-key'] = customKey;
+      }
+
       const response = await fetch('/api/triage', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ tasks })
       });
       const data = await response.json();
@@ -524,9 +532,15 @@ export default function App() {
     setLoading(true);
     setSelectedPlanTask(task);
     try {
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      const customKey = localStorage.getItem('user_gemini_api_key');
+      if (customKey) {
+        headers['x-gemini-key'] = customKey;
+      }
+
       const response = await fetch('/api/generate-plan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ task })
       });
       const data = await response.json();
@@ -557,9 +571,15 @@ export default function App() {
     const currentPanicLevel = selectedPlanTask ? selectedPlanTask.panicLevel : 7;
 
     try {
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      const customKey = localStorage.getItem('user_gemini_api_key');
+      if (customKey) {
+        headers['x-gemini-key'] = customKey;
+      }
+
       const response = await fetch('/api/peptalk', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           taskTitle: currentTaskTitle,
           panicLevel: currentPanicLevel,
@@ -612,9 +632,15 @@ export default function App() {
     setLoading(true);
     try {
       const title = excuseTask || (selectedPlanTask ? selectedPlanTask.title : "the current project deliverables");
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      const customKey = localStorage.getItem('user_gemini_api_key');
+      if (customKey) {
+        headers['x-gemini-key'] = customKey;
+      }
+
       const response = await fetch('/api/generate-excuse', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           taskTitle: title,
           reasonCategory: excuseReason,
@@ -654,9 +680,15 @@ export default function App() {
 
     try {
       const activeTask = simTask || excuseTask || (selectedPlanTask ? selectedPlanTask.title : "deliverables");
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      const customKey = localStorage.getItem('user_gemini_api_key');
+      if (customKey) {
+        headers['x-gemini-key'] = customKey;
+      }
+
       const response = await fetch('/api/stakeholder-simulator', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
           persona: simPersona,
@@ -700,9 +732,15 @@ export default function App() {
   const triggerCrisisAnalysis = async () => {
     setAnalyticsLoading(true);
     try {
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      const customKey = localStorage.getItem('user_gemini_api_key');
+      if (customKey) {
+        headers['x-gemini-key'] = customKey;
+      }
+
       const response = await fetch('/api/crisis-analysis', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ tasks })
       });
       const data = await response.json();
@@ -726,9 +764,15 @@ export default function App() {
   const triggerProcrastinationRisk = async () => {
     setLoading(true);
     try {
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      const customKey = localStorage.getItem('user_gemini_api_key');
+      if (customKey) {
+        headers['x-gemini-key'] = customKey;
+      }
+
       const response = await fetch('/api/procrastination-risk', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ tasks, habits })
       });
       const data = await response.json();
@@ -1217,6 +1261,17 @@ export default function App() {
             >
               <UserIcon className="w-4 h-4 text-indigo-500" />
               8. Connect Developer
+            </button>
+            <button
+              onClick={() => setActiveTab('terminal')}
+              className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-display font-black border transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === 'terminal'
+                  ? 'bg-white text-slate-950 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.1)]'
+                  : 'text-slate-700 border-transparent hover:bg-white/50'
+              }`}
+            >
+              <Terminal className="w-4 h-4 text-rose-500 animate-pulse" />
+              9. Crisis Terminal
             </button>
           </div>
 
@@ -2552,6 +2607,11 @@ export default function App() {
             {/* TAB 8: CONNECT DEVELOPER */}
             {activeTab === 'developer' && (
               <DeveloperConnect />
+            )}
+
+            {/* TAB 9: CRISIS TERMINAL */}
+            {activeTab === 'terminal' && (
+              <CrisisTerminal />
             )}
 
           </div>

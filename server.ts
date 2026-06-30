@@ -32,7 +32,8 @@ async function callGeminiWithRetryAndFallback(
   contents: any,
   config?: any,
   retries = 2,
-  delayMs = 1000
+  delayMs = 1000,
+  customApiKey?: string
 ): Promise<any> {
   const isTTS = model.includes("-tts-");
   let modelsToTry: string[];
@@ -48,12 +49,24 @@ async function callGeminiWithRetryAndFallback(
   }
   let lastError: any = null;
 
+  // Use the custom api key if passed, otherwise use the server-wide default client
+  const activeAi = customApiKey
+    ? new GoogleGenAI({
+        apiKey: customApiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build-custom',
+          }
+        }
+      })
+    : ai;
+
   for (const currentModel of modelsToTry) {
     let currentDelay = delayMs;
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         console.log(`[Gemini Info] Requesting ${currentModel} (Attempt ${attempt + 1}/${retries + 1})...`);
-        const response = await ai.models.generateContent({
+        const response = await activeAi.models.generateContent({
           model: currentModel,
           contents,
           config
@@ -100,6 +113,7 @@ async function callGeminiWithRetryAndFallback(
 // 1. Triage Endpoint - Urgency Matrix Sorting
 app.post("/api/triage", async (req, res) => {
   const { tasks } = req.body;
+  const customApiKey = req.headers["x-gemini-key"] as string | undefined;
   if (!tasks || !Array.isArray(tasks)) {
     return res.status(400).json({ error: "Invalid tasks provided" });
   }
@@ -199,7 +213,10 @@ Return a JSON object conforming exactly to this structure:
           },
           required: ["categories", "globalAnalysis", "topActionItems"]
         }
-      }
+      },
+      2,
+      1000,
+      customApiKey
     );
 
     const resultText = response.text || "{}";
@@ -276,6 +293,7 @@ Return a JSON object conforming exactly to this structure:
 // 2. Survival Planner Endpoint - Deep action plan with curated drafts
 app.post("/api/generate-plan", async (req, res) => {
   const { task } = req.body;
+  const customApiKey = req.headers["x-gemini-key"] as string | undefined;
   if (!task) {
     return res.status(400).json({ error: "Task is required" });
   }
@@ -346,7 +364,10 @@ Return a JSON object conforming exactly to this structure:
           },
           required: ["taskId", "steps", "timeBudgetSummary", "draftTitle", "draftContent", "proTip"]
         }
-      }
+      },
+      2,
+      1000,
+      customApiKey
     );
 
     const resultText = response.text || "{}";
@@ -498,6 +519,7 @@ Return a JSON object conforming exactly to this structure:
 // 3. Procrastination Risk Analyzer Endpoint
 app.post("/api/procrastination-risk", async (req, res) => {
   const { tasks, habits } = req.body;
+  const customApiKey = req.headers["x-gemini-key"] as string | undefined;
   
   try {
     const prompt = `You are a productivity cognitive scientist. Analyze the user's task load and habit streak tracking to assess their Procrastination Risk and deliver customized, high-leverage cognitive/behavioral tips.
@@ -537,7 +559,10 @@ Return a JSON object conforming exactly to this structure:
           },
           required: ["riskScore", "riskLevel", "analysis", "mitigationSteps"]
         }
-      }
+      },
+      2,
+      1000,
+      customApiKey
     );
 
     const resultText = response.text || "{}";
@@ -580,6 +605,7 @@ Return a JSON object conforming exactly to this structure:
 // 4. Extension Excuse & apology Generator
 app.post("/api/generate-excuse", async (req, res) => {
   const { taskTitle, reasonCategory, vibe } = req.body;
+  const customApiKey = req.headers["x-gemini-key"] as string | undefined;
   if (!taskTitle) {
     return res.status(400).json({ error: "Task title is required" });
   }
@@ -613,7 +639,10 @@ Return a JSON object conforming exactly to this structure:
           },
           required: ["subject", "body", "tips"]
         }
-      }
+      },
+      2,
+      1000,
+      customApiKey
     );
 
     const resultText = response.text || "{}";
@@ -649,6 +678,7 @@ Best regards,
 // AI-Generated "Fake Stakeholder" Simulator
 app.post("/api/stakeholder-simulator", async (req, res) => {
   const { messages, persona, taskTitle } = req.body;
+  const customApiKey = req.headers["x-gemini-key"] as string | undefined;
   
   const activeTask = taskTitle || "a key deliverable";
   const selectedPersona = persona || "strict-manager";
@@ -704,7 +734,10 @@ Return a JSON object conforming exactly to this structure:
           },
           required: ["reply", "feedback", "defensiveness", "professionalism", "clarity", "successLikelihood"]
         }
-      }
+      },
+      2,
+      1000,
+      customApiKey
     );
 
     const resultText = response.text || "{}";
@@ -752,6 +785,7 @@ Return a JSON object conforming exactly to this structure:
 // AI-Powered "Crisis Analytics" & Post-Mortem Coach
 app.post("/api/crisis-analysis", async (req, res) => {
   const { tasks } = req.body;
+  const customApiKey = req.headers["x-gemini-key"] as string | undefined;
   
   const totalTasks = (tasks || []).length;
   const completedTasks = (tasks || []).filter((t: any) => t.completed).length;
@@ -810,7 +844,10 @@ Return a JSON object conforming exactly to this structure:
           },
           required: ["overallInsight", "personalizedParagraph", "recommendedRoutineTitle", "recommendedRoutineDescription", "customTagline"]
         }
-      }
+      },
+      2,
+      1000,
+      customApiKey
     );
 
     const resultText = response.text || "{}";
@@ -841,6 +878,7 @@ app.post("/api/peptalk", async (req, res) => {
   const title = taskTitle || "your impending deadlines";
   const panic = panicLevel || 5;
   const selectedVibe = vibe || "soothing";
+  const customApiKey = req.headers["x-gemini-key"] as string | undefined;
 
   try {
     const textPrompt = `You are a high-performance mental coach. Write an incredibly inspiring, brief, high-impact vocal pep-talk (approx. 50-70 words) for someone tackling "${title}" under a panic level of ${panic}/10.
@@ -854,7 +892,11 @@ Keep the text compact and tailored for voice narration. Avoid any brackets, emoj
     // Step 5a: Generate the text of the pep talk
     const textResponse = await callGeminiWithRetryAndFallback(
       "gemini-3.5-flash",
-      textPrompt
+      textPrompt,
+      undefined,
+      2,
+      1000,
+      customApiKey
     );
 
     const pepText = textResponse.text?.trim() || "You've got this. Take a deep breath, clear your screen, and commit to five minutes of focused action. You are stronger than your anxiety.";
@@ -886,7 +928,10 @@ Keep the text compact and tailored for voice narration. Avoid any brackets, emoj
               prebuiltVoiceConfig: { voiceName: voiceName },
             },
           },
-        }
+        },
+        2,
+        1000,
+        customApiKey
       );
 
       const audioData = ttsResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
@@ -911,6 +956,50 @@ Keep the text compact and tailored for voice narration. Avoid any brackets, emoj
     res.json({
       text,
       audioBase64: undefined // TTS is offline during heavy API load
+    });
+  }
+});
+
+// ZERO HOUR Crisis Terminal Chat Endpoint
+app.post("/api/crisis-terminal", async (req, res) => {
+  const { messages } = req.body;
+  const customApiKey = req.headers["x-gemini-key"] as string | undefined;
+
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ error: "Invalid messages provided" });
+  }
+
+  // System instructions as requested
+  const systemInstruction = `You are the 'ZERO HOUR Crisis Terminal', a high-velocity, high-pressure AI coping coach and productivity triage agent for users who have procrastinated themselves into a corner. Your tone is urgent, slightly dramatic, but deeply practical and supportive—like a mission control operator trying to land a crashing plane. Do not be politely conversational or waste time with pleasantries. Keep responses brief, scannable, and broken down into immediate, microscopic action steps. Use terminal-like syntax fragments where appropriate (e.g., '[STATUS: CRITICAL]', '[EXECUTING SURVIVAL PLAN]').`;
+
+  // Format history for the AI
+  const historyText = messages
+    .map((m: any) => `${m.role === 'user' ? 'User' : 'Crisis Terminal'}: ${m.content}`)
+    .join("\n\n");
+
+  const prompt = `${systemInstruction}
+
+Here is the conversation history:
+${historyText}
+
+Crisis Terminal:`;
+
+  try {
+    const response = await callGeminiWithRetryAndFallback(
+      "gemini-3.5-flash",
+      prompt,
+      undefined,
+      2,
+      1000,
+      customApiKey
+    );
+
+    const reply = response.text || "[STATUS: OPERATIONAL] Mission control is ready. Input your parameters.";
+    res.json({ reply });
+  } catch (error: any) {
+    console.error("Crisis Terminal generation failed, using fallback:", error);
+    res.json({
+      reply: "[STATUS: OFFLINE COGNITIVE MITIGATION]\n\n[PROCEED TO SURVIVAL DRILL]\n1. Power down all communication devices.\n2. Set timer to 25 minutes.\n3. Execute first macroscopic task immediately."
     });
   }
 });
