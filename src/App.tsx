@@ -28,7 +28,10 @@ import {
   BarChart3,
   Lightbulb,
   User as UserIcon,
-  Terminal
+  Terminal,
+  KeyRound,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -45,6 +48,7 @@ import {
   Cell,
   Legend
 } from 'recharts';
+import { motion } from 'motion/react';
 import PanicTimer from './components/PanicTimer';
 import DeveloperConnect from './components/DeveloperConnect';
 import CrisisTerminal from './components/CrisisTerminal';
@@ -150,6 +154,28 @@ export default function App() {
   // --- UI and AI Output States ---
   const [activeTab, setActiveTab] = useState<'triage' | 'planner' | 'peptalk' | 'excuse' | 'risk' | 'calendar' | 'analytics' | 'developer' | 'terminal'>('triage');
   const [loading, setLoading] = useState<boolean>(false);
+  
+  // Custom API Key configuration states
+  const [apiKeyModalOpen, setApiKeyModalOpen] = useState<boolean>(false);
+  const [userApiKey, setUserApiKey] = useState<string>(() => localStorage.getItem('user_gemini_api_key') || '');
+  const [isApiKeySaved, setIsApiKeySaved] = useState<boolean>(() => !!localStorage.getItem('user_gemini_api_key'));
+  const [showApiKeyInput, setShowApiKeyInput] = useState<boolean>(false);
+
+  const handleSaveApiKey = (key: string) => {
+    if (key.trim()) {
+      localStorage.setItem('user_gemini_api_key', key.trim());
+      setUserApiKey(key.trim());
+      setIsApiKeySaved(true);
+      setApiKeyModalOpen(false);
+    }
+  };
+
+  const handleClearApiKey = () => {
+    localStorage.removeItem('user_gemini_api_key');
+    setUserApiKey('');
+    setIsApiKeySaved(false);
+    setApiKeyModalOpen(false);
+  };
   
   // --- Google Calendar State ---
   const [googleUser, setGoogleUser] = useState<User | null>(null);
@@ -868,6 +894,18 @@ export default function App() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setApiKeyModalOpen(true)}
+              className={`flex items-center gap-2 px-4 py-3 rounded-xl font-display font-black text-sm border-2 border-slate-950 transition-all active:translate-y-0.5 shadow-[4px_4px_0px_0px_rgba(255,255,255,1)] cursor-pointer ${
+                isApiKeySaved 
+                  ? "bg-indigo-600 hover:bg-indigo-500 text-white" 
+                  : "bg-slate-800 hover:bg-slate-700 text-slate-200"
+              }`}
+            >
+              <KeyRound className={`w-4 h-4 ${isApiKeySaved ? "text-amber-400 fill-amber-400" : "text-slate-400"}`} />
+              {isApiKeySaved ? "GEMINI KEY ACTIVE" : "ADD API KEY"}
+            </button>
+
             <button
               onClick={triggerAutoTriage}
               disabled={loading}
@@ -2648,6 +2686,83 @@ export default function App() {
           Designed off-center to prevent tech-larping logs and keep focus on real psychological action items.
         </p>
       </footer>
+
+      {/* Gemini API Key Configuration Modal Overlay */}
+      {apiKeyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="w-full max-w-md bg-slate-900 border-3 border-slate-950 rounded-2xl overflow-hidden shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-slate-100 p-6 relative font-mono"
+          >
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-amber-400 animate-pulse" />
+                <span className="text-sm font-black text-white uppercase tracking-wider">
+                  Gemini API Console
+                </span>
+              </div>
+              <button 
+                onClick={() => setApiKeyModalOpen(false)}
+                className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs font-sans text-slate-350 leading-relaxed mb-4">
+              Supply your own **Gemini API Key** to bypass shared studio limits and run all triage, planning, crisis analysis, and pep-talk features with zero interruption.
+            </p>
+
+            <div className="space-y-4">
+              <div className="relative">
+                <input
+                  type={showApiKeyInput ? "text" : "password"}
+                  value={userApiKey}
+                  onChange={(e) => setUserApiKey(e.target.value)}
+                  placeholder="AIzaSy..."
+                  className="w-full bg-slate-950 border-2 border-slate-800 focus:border-amber-500 text-white font-mono text-xs px-3 py-2.5 rounded-xl focus:outline-none placeholder-slate-600 transition-colors pr-16"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-mono text-slate-400 hover:text-white bg-slate-950 px-2.5 py-1 border border-slate-800 rounded transition-all cursor-pointer"
+                >
+                  {showApiKeyInput ? "Hide" : "Show"}
+                </button>
+              </div>
+
+              {/* Status indicator */}
+              <div className="flex items-center justify-between text-[10px] text-slate-400 bg-slate-950 px-3 py-2 rounded-lg border border-slate-800">
+                <span>Active Link:</span>
+                {isApiKeySaved ? (
+                  <span className="text-emerald-400 font-bold uppercase">Custom Key Configured</span>
+                ) : (
+                  <span className="text-indigo-400 font-bold uppercase">Studio Key Shared (Default)</span>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => handleSaveApiKey(userApiKey)}
+                  disabled={!userApiKey.trim()}
+                  className="flex-1 px-4 py-2.5 bg-emerald-400 hover:bg-emerald-500 disabled:opacity-50 text-slate-950 font-sans font-extrabold text-xs rounded-xl border-2 border-slate-950 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer text-center"
+                >
+                  Save API Key
+                </button>
+                {isApiKeySaved && (
+                  <button
+                    onClick={handleClearApiKey}
+                    className="px-4 py-2.5 bg-rose-950/40 hover:bg-rose-950/80 border border-rose-900 text-rose-300 font-sans font-extrabold text-xs rounded-xl transition-all cursor-pointer"
+                  >
+                    Reset to Default
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
