@@ -174,7 +174,16 @@ export default function App() {
   // --- Persistent State ---
   const [tasks, setTasks] = useState<Task[]>(() => {
     const saved = localStorage.getItem('saver_tasks');
-    return saved ? JSON.parse(saved) : [];
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Exclude legacy demo/hist tasks to fully clean up existing/new user caches
+          return parsed.filter((t: any) => t && t.id && !t.id.startsWith('task-hist-'));
+        }
+      } catch (e) {}
+    }
+    return [];
   });
 
   const [categories, setCategories] = useState<CustomCategory[]>(() => {
@@ -215,7 +224,16 @@ export default function App() {
 
   const [habits, setHabits] = useState<Habit[]>(() => {
     const saved = localStorage.getItem('saver_habits');
-    return saved ? JSON.parse(saved) : INITIAL_HABITS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Exclude default placeholder habits to start with a pristine user-defined habit list
+          return parsed.filter((h: any) => h && h.id && !h.id.startsWith('habit-'));
+        }
+      } catch (e) {}
+    }
+    return [];
   });
 
   // --- UI and AI Output States ---
@@ -433,8 +451,11 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed[0];
+        if (Array.isArray(parsed)) {
+          const nonDemo = parsed.filter((t: any) => t && t.id && !t.id.startsWith('task-hist-'));
+          if (nonDemo.length > 0) {
+            return nonDemo[0];
+          }
         }
       } catch (e) {}
     }
