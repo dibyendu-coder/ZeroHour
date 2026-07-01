@@ -52,7 +52,23 @@ import { motion } from 'motion/react';
 import PanicTimer from './components/PanicTimer';
 import DeveloperConnect from './components/DeveloperConnect';
 import CrisisTerminal from './components/CrisisTerminal';
-import { Task, SurvivalPlan, Habit, TriageResult, ProcrastinationRisk, ExcuseDraft, PepTalk } from './types';
+import SortableTaskItem from './components/SortableTaskItem';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable';
+import { Task, SurvivalPlan, Habit, TriageResult, ProcrastinationRisk, ExcuseDraft, PepTalk, CustomCategory, DEFAULT_CATEGORIES } from './types';
 import { pcmToWavBlob } from './utils/audio';
 import { initAuth, googleSignIn, logout } from './utils/firebaseAuth';
 import { listUpcomingEvents, createCalendarEvent, CalendarEvent } from './utils/calendarService';
@@ -139,12 +155,63 @@ const INITIAL_HABITS: Habit[] = [
   { id: 'habit-3', name: 'Take a deep breathing break before starting hard tasks', frequency: 'daily', streak: 2, lastCompleted: '2026-06-27' }
 ];
 
+const CATEGORY_COLOR_PRESETS = [
+  { name: 'Indigo', class: 'bg-indigo-50 border-indigo-200 text-indigo-750 font-bold' },
+  { name: 'Emerald', class: 'bg-emerald-50 border-emerald-200 text-emerald-750 font-bold' },
+  { name: 'Amber', class: 'bg-amber-50 border-amber-200 text-amber-750 font-bold' },
+  { name: 'Rose', class: 'bg-rose-50 border-rose-200 text-rose-750 font-bold' },
+  { name: 'Cyan', class: 'bg-cyan-50 border-cyan-200 text-cyan-750 font-bold' },
+  { name: 'Purple', class: 'bg-purple-50 border-purple-200 text-purple-750 font-bold' },
+  { name: 'Teal', class: 'bg-teal-50 border-teal-200 text-teal-750 font-bold' },
+  { name: 'Orange', class: 'bg-orange-50 border-orange-200 text-orange-750 font-bold' },
+  { name: 'Sky', class: 'bg-sky-50 border-sky-200 text-sky-750 font-bold' },
+  { name: 'Pink', class: 'bg-pink-50 border-pink-200 text-pink-750 font-bold' },
+];
+
+const CATEGORY_EMOJI_PRESETS = ['🎓', '💼', '🏠', '⚡', '📦', '🎨', '🚀', '🧠', '🩺', '📝', '🛒', '🚲', '🎵', '🌱', '🔒', '🔥', '📊', '🤝', '🎮', '✈️', '📌', '❤️'];
+
 export default function App() {
   // --- Persistent State ---
   const [tasks, setTasks] = useState<Task[]>(() => {
     const saved = localStorage.getItem('saver_tasks');
     return saved ? JSON.parse(saved) : INITIAL_TASKS;
   });
+
+  const [categories, setCategories] = useState<CustomCategory[]>(() => {
+    const saved = localStorage.getItem('saver_categories');
+    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+  });
+
+  // --- Category Creation Form State ---
+  const [customCategoryName, setCustomCategoryName] = useState('');
+  const [customCategoryColor, setCustomCategoryColor] = useState('bg-indigo-50 border-indigo-200 text-indigo-750 font-bold');
+  const [customCategoryIcon, setCustomCategoryIcon] = useState('🎓');
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+
+  // --- Drag and Drop Sensors & Handler ---
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 4, // 4px movement required to start dragging, so clicks work perfectly
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setTasks((prevTasks) => {
+        const oldIndex = prevTasks.findIndex((item) => item.id === active.id);
+        const newIndex = prevTasks.findIndex((item) => item.id === over.id);
+
+        return arrayMove(prevTasks, oldIndex, newIndex);
+      });
+    }
+  };
 
   const [habits, setHabits] = useState<Habit[]>(() => {
     const saved = localStorage.getItem('saver_habits');
@@ -430,6 +497,10 @@ export default function App() {
     localStorage.setItem('saver_habits', JSON.stringify(habits));
   }, [habits]);
 
+  useEffect(() => {
+    localStorage.setItem('saver_categories', JSON.stringify(categories));
+  }, [categories]);
+
   // Handle Clean Cleanup of Audio URLs on unmount
   useEffect(() => {
     return () => {
@@ -469,6 +540,34 @@ export default function App() {
     setNewTaskDifficulty('medium');
     setNewTaskPanic(5);
     setNewTaskNotes('');
+  };
+
+  const handleAddCustomCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customCategoryName.trim()) return;
+
+    const id = `cat-${Date.now()}`;
+    const newCategory: CustomCategory = {
+      id,
+      name: customCategoryName.trim(),
+      color: customCategoryColor,
+      icon: customCategoryIcon
+    };
+
+    setCategories(prev => [...prev, newCategory]);
+    setCustomCategoryName('');
+    // Auto-select the newly created category for immediate task logging
+    setNewTaskCategory(id);
+  };
+
+  const handleDeleteCustomCategory = (id: string) => {
+    const defaults = ['academic', 'professional', 'personal', 'household', 'other'];
+    if (defaults.includes(id)) return;
+
+    setCategories(prev => prev.filter(c => c.id !== id));
+    if (newTaskCategory === id) {
+      setNewTaskCategory('academic');
+    }
   };
 
   const toggleTaskCompleted = (id: string) => {
@@ -869,7 +968,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fafaf9] text-slate-900 font-sans p-4 md:p-8 selection:bg-emerald-300 selection:text-slate-950">
+    <div className="min-h-screen bg-white text-slate-900 font-sans p-4 md:p-8 selection:bg-emerald-300 selection:text-slate-950 transition-colors duration-200">
       {/* Header Command Bar */}
       <header className="max-w-7xl mx-auto mb-8 bg-slate-900 text-white rounded-2xl p-6 border-3 border-slate-950 shadow-[6px_6px_0px_0px_rgba(0,0,0,0.15)] relative overflow-hidden">
         <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-64 h-64 bg-emerald-500 rounded-full filter blur-3xl opacity-20"></div>
@@ -966,17 +1065,26 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Category</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-medium text-slate-700">Category</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowCategoryManager(!showCategoryManager)}
+                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                    >
+                      {showCategoryManager ? "Hide Manager" : "Manage 🏷️"}
+                    </button>
+                  </div>
                   <select
                     value={newTaskCategory}
-                    onChange={(e) => setNewTaskCategory(e.target.value as Task['category'])}
+                    onChange={(e) => setNewTaskCategory(e.target.value)}
                     className="w-full text-xs px-2 py-2 rounded-lg border-2 border-slate-300 focus:border-slate-900 focus:outline-none bg-white"
                   >
-                    <option value="academic">🎓 Academic</option>
-                    <option value="professional">💼 Professional</option>
-                    <option value="personal">🏠 Personal</option>
-                    <option value="household">⚡ Household/Bill</option>
-                    <option value="other">📦 Other</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.icon} {cat.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1036,6 +1144,131 @@ export default function App() {
               </button>
             </form>
 
+            {/* Category Manager Collapsible Panel */}
+            {showCategoryManager && (
+              <div className="mb-6 p-4 bg-indigo-50/50 border-2 border-indigo-200 rounded-xl space-y-4">
+                <div className="flex items-center justify-between border-b border-indigo-150 pb-2">
+                  <h3 className="text-xs font-display font-black text-indigo-950 uppercase tracking-wide flex items-center gap-1">
+                    <span>🏷️</span> Category Tag Creator
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowCategoryManager(false)}
+                    className="text-[10px] font-bold text-slate-400 hover:text-slate-700 font-mono"
+                  >
+                    CLOSE
+                  </button>
+                </div>
+
+                {/* Form to create a custom category */}
+                <form onSubmit={handleAddCustomCategory} className="space-y-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-indigo-900 mb-1">New Category Name</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Side Project, Fitness, Health"
+                      value={customCategoryName}
+                      onChange={(e) => setCustomCategoryName(e.target.value)}
+                      className="w-full text-xs px-2.5 py-1.5 rounded-lg border-2 border-indigo-200 focus:border-indigo-500 focus:outline-none bg-white font-sans"
+                    />
+                  </div>
+
+                  {/* Color Preset Selector */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-indigo-900 mb-1">Select Tag Color Accent</label>
+                    <div className="flex flex-wrap gap-1.5 max-h-[72px] overflow-y-auto pr-1">
+                      {CATEGORY_COLOR_PRESETS.map((preset) => {
+                        const isSelected = customCategoryColor === preset.class;
+                        return (
+                          <button
+                            key={preset.name}
+                            type="button"
+                            onClick={() => setCustomCategoryColor(preset.class)}
+                            className={`px-2 py-1 rounded text-[9px] font-semibold border-2 transition-all cursor-pointer ${preset.class} ${
+                              isSelected ? 'border-slate-900 ring-2 ring-indigo-300' : 'border-transparent'
+                            }`}
+                          >
+                            {preset.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Emoji Preset Selector */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-indigo-900 mb-1">Select Emoji Icon</label>
+                    <div className="grid grid-cols-8 gap-1 p-1.5 bg-white border border-indigo-150 rounded-lg max-h-[84px] overflow-y-auto">
+                      {CATEGORY_EMOJI_PRESETS.map((emoji) => {
+                        const isSelected = customCategoryIcon === emoji;
+                        return (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => setCustomCategoryIcon(emoji)}
+                            className={`w-7 h-7 flex items-center justify-center text-sm rounded-md transition-colors hover:bg-slate-100 cursor-pointer ${
+                              isSelected ? 'bg-indigo-100 border border-indigo-400 font-bold' : ''
+                            }`}
+                          >
+                            {emoji}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Preview of the resulting tag */}
+                  <div className="bg-white p-2 rounded-lg border border-indigo-100 flex items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[9px] font-mono font-bold text-slate-400 block mb-0.5">TAG PREVIEW</span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold border ${customCategoryColor}`}>
+                        <span>{customCategoryIcon}</span>
+                        <span>{customCategoryName.trim() || 'Custom Tag'}</span>
+                      </span>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={!customCategoryName.trim()}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-display text-[10px] font-black rounded-lg border border-indigo-700 transition-all shadow-sm active:translate-y-0.5 cursor-pointer"
+                    >
+                      + ADD TAG
+                    </button>
+                  </div>
+                </form>
+
+                {/* List of currently defined categories */}
+                <div className="pt-2 border-t border-indigo-150">
+                  <label className="block text-[10px] font-bold text-indigo-900 mb-1.5">Existing Categories</label>
+                  <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                    {categories.map((cat) => {
+                      const isDefault = ['academic', 'professional', 'personal', 'household', 'other'].includes(cat.id);
+                      return (
+                        <div key={cat.id} className="flex items-center justify-between p-1.5 bg-white/70 rounded-lg border border-indigo-50">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${cat.color}`}>
+                            <span>{cat.icon}</span>
+                            <span>{cat.name}</span>
+                          </span>
+                          {!isDefault ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCustomCategory(cat.id)}
+                              className="text-[9px] text-rose-500 hover:text-rose-700 font-mono font-bold px-1.5 py-0.5 rounded hover:bg-rose-50 cursor-pointer"
+                              title="Delete custom category"
+                            >
+                              DELETE
+                            </button>
+                          ) : (
+                            <span className="text-[9px] text-slate-400 italic px-1.5 font-mono">system</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Task List */}
             <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
               {tasks.length === 0 ? (
@@ -1045,76 +1278,32 @@ export default function App() {
                   <p className="text-xs text-slate-400 mt-1">Excellent job keeping your schedule clean.</p>
                 </div>
               ) : (
-                tasks.map((task) => {
-                  const dl = formatDeadline(task.deadline);
-                  const isSelected = selectedPlanTask?.id === task.id;
-                  return (
-                    <div 
-                      key={task.id}
-                      className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer ${
-                        isSelected 
-                          ? 'bg-slate-900 text-white border-slate-900 shadow-[4px_4px_0px_0px_rgba(16,185,129,1)]' 
-                          : 'bg-white text-slate-800 border-slate-200 hover:border-slate-900 hover:shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]'
-                      }`}
-                      onClick={() => setSelectedPlanTask(task)}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-start gap-2.5">
-                          <input
-                            type="checkbox"
-                            checked={task.completed}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              toggleTaskCompleted(task.id);
-                            }}
-                            className="mt-1 h-4.5 w-4.5 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400 cursor-pointer"
-                          />
-                          <div>
-                            <p className={`text-sm font-display font-bold leading-tight ${task.completed ? 'line-through text-slate-400' : ''}`}>
-                              {task.title}
-                            </p>
-                            <p className="text-[11px] text-slate-450 mt-1 flex items-center gap-1 font-mono">
-                              <span>{task.category === 'academic' ? '🎓' : task.category === 'professional' ? '💼' : task.category === 'personal' ? '🏠' : '⚡'}</span>
-                              <span>• Diff: {task.difficulty}</span>
-                              <span className="text-rose-400 font-bold">• Panic: {task.panicLevel}/10</span>
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteTask(task.id);
-                          }}
-                          className={`p-1 rounded hover:bg-rose-100 ${isSelected ? 'text-rose-400 hover:text-rose-600' : 'text-slate-400 hover:text-rose-600'}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      <div className="mt-3 pt-2 border-t border-dashed border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-[11px] text-slate-450 font-mono">
-                          {dl.formattedDate}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          {dl.urgencyBadge}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              triggerSurvivalPlan(task);
-                            }}
-                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors ${
-                              isSelected 
-                                ? 'bg-emerald-400 border-emerald-500 text-slate-950 hover:bg-emerald-300' 
-                                : 'bg-slate-100 border-slate-200 text-slate-700 hover:border-slate-900 hover:bg-slate-50'
-                            }`}
-                          >
-                            Plan ⚡
-                          </button>
-                        </div>
-                      </div>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={tasks.map(t => t.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-3">
+                      {tasks.map((task) => (
+                        <SortableTaskItem
+                          key={task.id}
+                          task={task}
+                          categories={categories}
+                          isSelected={selectedPlanTask?.id === task.id}
+                          onClick={() => setSelectedPlanTask(task)}
+                          onToggleComplete={toggleTaskCompleted}
+                          onDelete={handleDeleteTask}
+                          onPlan={triggerSurvivalPlan}
+                          formatDeadline={formatDeadline}
+                        />
+                      ))}
                     </div>
-                  );
-                })
+                  </SortableContext>
+                </DndContext>
               )}
             </div>
           </div>
@@ -2421,14 +2610,13 @@ export default function App() {
                 : 0;
 
               // Formatting category counts for recharts BarChart
-              const categoriesList = ['academic', 'professional', 'personal', 'household', 'other'];
-              const categoryCounts = categoriesList.map(cat => {
-                const count = tasks.filter(t => t.category === cat).length;
-                const avgCategoryPanic = tasks.filter(t => t.category === cat).length > 0
-                  ? (tasks.filter(t => t.category === cat).reduce((sum, t) => sum + t.panicLevel, 0) / tasks.filter(t => t.category === cat).length).toFixed(1)
+              const categoryCounts = categories.map(cat => {
+                const count = tasks.filter(t => t.category === cat.id).length;
+                const avgCategoryPanic = tasks.filter(t => t.category === cat.id).length > 0
+                  ? (tasks.filter(t => t.category === cat.id).reduce((sum, t) => sum + t.panicLevel, 0) / tasks.filter(t => t.category === cat.id).length).toFixed(1)
                   : "0.0";
                 return {
-                  name: cat.charAt(0).toUpperCase() + cat.slice(1),
+                  name: cat.name,
                   count,
                   avgPanic: parseFloat(avgCategoryPanic)
                 };
