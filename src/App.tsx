@@ -174,7 +174,7 @@ export default function App() {
   // --- Persistent State ---
   const [tasks, setTasks] = useState<Task[]>(() => {
     const saved = localStorage.getItem('saver_tasks');
-    return saved ? JSON.parse(saved) : INITIAL_TASKS;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [categories, setCategories] = useState<CustomCategory[]>(() => {
